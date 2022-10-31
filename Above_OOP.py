@@ -48,9 +48,10 @@ class Above(object):
     def __init__(self) -> None:
         self.LOG_FILENAME = "./logs/%s.log" % strftime("%Y%m%d-%H%M")
         self.args = self._argv_parse()
-        makedirs("./logs/") if exists("./logs/") else None
-        logging.basicConfig(filename=self.LOG_FILE, level=logging.INFO,
+        makedirs("./logs/") if not exists("./logs/") else None
+        logging.basicConfig(filename=self.LOG_FILENAME, level=logging.INFO,
                             format='%(asctime)s.%(msecs)03d %(levelname)s %(module)s - %(funcName)s: %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+        logging.info("[*] Start scanning...")
 
     def _argv_parse(self) -> argparse.Namespace:
         parser = argparse.ArgumentParser()
@@ -330,11 +331,31 @@ class Above(object):
             print (Fore.YELLOW + Style.BRIGHT + "[*] Switched " + Fore.BLUE + Style.BRIGHT + "successfully")
         else:
             print (Fore.RED + Style.BRIGHT + "[!] Error. Not switched to promisc.")
+    
+    def call_scanner(self) -> None:
+        '''
+        Call the functions that the user has selected as command line arguments. If fullscan is selected, check it immediately
+        '''
+        function_list = [func for func in dir(self) if func.startswith("detect")]
+        scanners = vars(self.args)
+        if scanners['fullscan']:
+            for function_name in function_list:
+                func = getattr(locals()['self'], function_name)
+                func()
+            return 
+        scanners.pop("interface")
+        scanners.pop("timeout")
+        scanners.pop("fullscan")
+        for scanner in scanners.keys():
+            if scanners[scanner]:
+                func = getattr(locals()['self'], f'detect_{scanner}')
+                func()
+    
 
 def main():
     scanner = Above()
     scanner.switch_to_promisc(scanner.args.interface)
-    # Write function call here. Need to optimize that if's count btw :>
+    scanner.call_scanner()
 
 if __name__ == "__main__":
     main()
