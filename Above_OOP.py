@@ -57,6 +57,7 @@ class Above(object):
         parser = argparse.ArgumentParser()
         parser.add_argument("--interface", dest="interface", type=str, required=True, help="Specify your interface")
         parser.add_argument("--timeout", dest="timeout", type=int, required=True, help="Specify the timeout. How much time to sniff")
+        parser.add_argument("--fullscan", dest="fullscan", action='store_true', help="Scan all protocols")
         parser.add_argument("--cdp", dest="cdp",  action='store_true', help="CDP Scan")
         parser.add_argument("--dtp", dest="dtp",  action='store_true', help="DTP Scan")
         parser.add_argument("--lldp", dest="lldp", action='store_true', help="LLDP Scan")
@@ -68,7 +69,6 @@ class Above(object):
         parser.add_argument("--llmnr", dest="llmnr",  action='store_true', help="LLMNR Scan")
         parser.add_argument("--nbns", dest="nbns",  action='store_true', help="NBNS Scan")
         parser.add_argument("--dhcpv6", dest="dhcpv6", action='store_true', help="DHCPv6 Scan")
-        parser.add_argument("--fullscan", dest="fullscan", action='store_true', help="Scan all protocols")
         return parser.parse_args()
 
     def _hex_to_string(self, hex: str) -> str:
@@ -104,7 +104,7 @@ class Above(object):
             cdp_frame = sniff(filter="ether dst 01:00:0c:cc:cc:cc", count=1, timeout=self.args.timeout, iface=self.args.interface)
             snapcode = cdp_frame[0][SNAP].code
         except:
-            logging.error("\n[!] Error. CDP isn't detected.")
+            logging.error("[!] Error. CDP isn't detected.")
             return
         if snapcode == 0x2000:
             cdp_hostname = cdp_frame[0][CDPMsgDeviceID].val
@@ -138,7 +138,7 @@ class Above(object):
             logging.info("[*] Target Hostname : "  + str(lldp_system_name.decode()))
             logging.info("[*] Target OS Version : "  + str(lldp_description.decode()))
         except:
-            logging.error("\n[!] Error. LLDP isn't detected.")
+            logging.error("[!] Error. LLDP isn't detected.")
         return
         
     def detect_dtp(self):
@@ -187,13 +187,13 @@ class Above(object):
         print(Fore.GREEN + Style.BRIGHT + "\n[+] Sniffing the EIGRP protocol...")
         try:
             eigrp_packet = sniff(filter="ip dst 224.0.0.10", count=1, timeout=self.args.timeout, iface=self.args.interface)
-            logging.info("[*] Info: Detected EIGRP. Here is a little information about the autonomous system")
-            logging.info("[*] Impact: Network Intelligence, MITM, DoS, Blackhole.")
-            logging.info("[*] Tools: Loki, Scapy, FRRouting")
             as_number = eigrp_packet[0][EIGRP].asn
             if eigrp_packet[0].haslayer("EIGRPAuthData"):
                 logging.info("[!] There is EIGRP Authentication")
             eigrp_neighbor_ip = eigrp_packet[0][IP].src
+            logging.info("[*] Info: Detected EIGRP. Here is a little information about the autonomous system")
+            logging.info("[*] Impact: Network Intelligence, MITM, DoS, Blackhole.")
+            logging.info("[*] Tools: Loki, Scapy, FRRouting")
             logging.info("[*] Your AS Number is " + str(as_number))
             logging.info("[*] Your EIGRP Neighbor is " + str(eigrp_neighbor_ip))
         except:
@@ -310,7 +310,7 @@ class Above(object):
     def detect_dhcpv6(self) -> None:
         print(Fore.GREEN + Style.BRIGHT + "\n[+] Sniffing the DHCPv6 protocol...")
         try:
-            dhcpv6_packet = sniff(count = 1,lfilter=self._dhcpv6_sniff(), iface=self.args.interface, timeout=self.args.timeout)
+            dhcpv6_packet = sniff(count = 1,lfilter=self._dhcpv6_sniff, iface=self.args.interface, timeout=self.args.timeout)
             dhcpv6_mac_address_sender = dhcpv6_packet[0][Ether].src
             dhcpv6_packet_sender = dhcpv6_packet[0][IPv6].src
             logging.info("[*] Info: Detected DHCPv6 request.")
@@ -338,17 +338,15 @@ class Above(object):
         '''
         function_list = [func for func in dir(self) if func.startswith("detect")]
         scanners = vars(self.args)
-        if scanners['fullscan']:
+        if self.args.fullscan:
             for function_name in function_list:
                 func = getattr(locals()['self'], function_name)
                 func()
             return 
-        scanners.pop("interface")
-        scanners.pop("timeout")
-        scanners.pop("fullscan")
         for scanner in scanners.keys():
-            if scanners[scanner]:
-                func = getattr(locals()['self'], f'detect_{scanner}')
+            prob_func_name = f'detect_{scanner}'
+            if scanners[scanner] and prob_func_name in function_list:
+                func = getattr(locals()['self'], prob_func_name)
                 func()
     
 
