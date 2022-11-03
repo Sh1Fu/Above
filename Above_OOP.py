@@ -97,6 +97,29 @@ class Above(object):
             return True
         return False
     
+    def _hsrpv1_check(self, packet: PacketList) -> None:
+        '''
+        Scan HSRPv1. Waiting five HSRP frames for test. Check auth types in frames
+        '''
+        for frame in range(0, 5, 1):
+            if packet[frame][HSRP].state == 16 and packet[frame][HSRP].priority < 255:
+                logging.warning("[*] Info: Detected vulnerable HSRP value of ACTIVE Route")
+                packet_sender_ip = packet[frame][IP].src
+                packet_sender_mac = packet[frame][Ether].src
+                packet_priority = packet[frame][HSRP].priority
+                logging.info("[*] HSRPv1 Sender Value: " + str(packet_priority)) if frame != 0 else logging.info("[*] HSRPv1 ACTIVE Sender Value: " + str(packet_priority))
+                logging.info("[*] HSRPv1 Sender IP: " + str(packet_sender_ip))
+                logging.info("[*] HSRPv1 Sender MAC: " + str(packet_sender_mac))
+                if packet[frame].haslayer(HSRPmd5):
+                    logging.info ("[!] HSRP MD5 Authentication is used. You can bruteforce it.")
+                    logging.info ("[*] Tools for bruteforce: hsrp2john.py, John the Ripper")
+                if packet[frame][HSRP].auth:
+                    print ("[!] Simple HSRP Authentication is used.")
+                    hsrpv1_plaintext = packet[frame][HSRP].auth
+                    simple_hsrp_pass = hsrpv1_plaintext.decode("UTF-8")
+                    logging.info("[!] HSRP Plaintext Password: " + simple_hsrp_pass)
+                return
+    
     def detect_cdp(self) -> None:
         print(Fore.GREEN + Style.BRIGHT + "\n[+] Sniffing the CDP protocol...")
         snapcode = None
@@ -104,7 +127,7 @@ class Above(object):
             cdp_frame = sniff(filter="ether dst 01:00:0c:cc:cc:cc", count=1, timeout=self.args.timeout, iface=self.args.interface)
             snapcode = cdp_frame[0][SNAP].code
         except:
-            logging.error("[!] Error. CDP isn't detected.")
+            logging.error("[!] CDP isn't detected.")
             return
         if snapcode == 0x2000:
             cdp_hostname = cdp_frame[0][CDPMsgDeviceID].val
@@ -131,14 +154,14 @@ class Above(object):
             lldp_port_id = lldp_frame[0][LLDPDUPortDescription].description
             lldp_system_name = lldp_frame[0][LLDPDUSystemName].system_name
             lldp_description = lldp_frame[0][LLDPDUSystemDescription].description
-            logging.info("[*] Info: Detected vulnerable LLDP")
+            logging.warning("[*] Info: Detected vulnerable LLDP")
             logging.info("[*] Impact: Information Gathering")
             logging.info("[*] Tools: Wireshark")
             logging.info("[*] Your Port ID : "  + str(lldp_port_id.decode()))
             logging.info("[*] Target Hostname : "  + str(lldp_system_name.decode()))
             logging.info("[*] Target OS Version : "  + str(lldp_description.decode()))
         except:
-            logging.error("[!] Error. LLDP isn't detected.")
+            logging.error("[!] LLDP isn't detected.")
         return
         
     def detect_dtp(self):
@@ -148,14 +171,14 @@ class Above(object):
             dtp_snapcode = dtp_frame[0][SNAP].code
             if dtp_snapcode == 0x2004:
                 dtp_neighbor = dtp_frame[0][DTPNeighbor].neighbor
-                logging.info("[*] Info: Detected vulnerable DTP")
+                logging.warning("[*] Info: Detected vulnerable DTP")
                 logging.info("[*] Impact: VLAN Segmenation Bypassing")
                 logging.info("[*] Tools: Yersinia, Scapy")
                 logging.info("[*] DTP Neighbor is : "  + str(dtp_neighbor))
             if dtp_snapcode == 0x2000:
                 logging.info("[!] Detected CDP. Skipping... Run the script again!")
         except:
-            logging.error("[!] Error. DTP isn't detected.")
+            logging.error("[!] DTP isn't detected.")
         return
 
     def detect_ospf(self):
@@ -168,7 +191,7 @@ class Above(object):
             auth_data_length = ospf_packet[0][OSPF_Hdr].authdatalen
             auth_seq = ospf_packet[0][OSPF_Hdr].seq
             hello_source = ospf_packet[0][OSPF_Hdr].src
-            logging.info("[*] Info: Detected vulnerable OSPF. Here is a little information about the autonomous system")
+            logging.warning("[*] Info: Detected vulnerable OSPF. Here is a little information about the autonomous system")
             logging.info("[*] Impact: Network Intelligence, MITM, DoS, Blackhole.")
             logging.info("[*] Tools: Loki, Scapy, FRRouting")
             logging.info("[*] Your OSPF area ID: "  + str(area_id))
@@ -180,7 +203,7 @@ class Above(object):
             if auth_type == 0x02:
                 self._ospf_crypt_auth(ospf_key_id, auth_data_length, auth_seq)
         except:
-            logging.error("[!] Error. OSPF isn't detected.")
+            logging.error("[!] OSPF isn't detected.")
         return
 
     def detect_eigrp(self) -> None:
@@ -191,37 +214,14 @@ class Above(object):
             if eigrp_packet[0].haslayer("EIGRPAuthData"):
                 logging.info("[!] There is EIGRP Authentication")
             eigrp_neighbor_ip = eigrp_packet[0][IP].src
-            logging.info("[*] Info: Detected EIGRP. Here is a little information about the autonomous system")
+            logging.warning("[*] Info: Detected EIGRP. Here is a little information about the autonomous system")
             logging.info("[*] Impact: Network Intelligence, MITM, DoS, Blackhole.")
             logging.info("[*] Tools: Loki, Scapy, FRRouting")
             logging.info("[*] Your AS Number is " + str(as_number))
             logging.info("[*] Your EIGRP Neighbor is " + str(eigrp_neighbor_ip))
         except:
-            logging.error("[!] Error. EIGRP isn't detected.")
+            logging.error("[!] EIGRP isn't detected.")
         return 
-
-    def _hsrpv1_check(self, packet: PacketList) -> None:
-        '''
-        Scan HSRPv1. Waiting five HSRP frames for test. Check auth types in frames
-        '''
-        for frame in range(0, 5, 1):
-            if packet[frame][HSRP].state == 16 and packet[frame][HSRP].priority < 255:
-                logging.info("[*] Info: Detected vulnerable HSRP value of ACTIVE Route")
-                packet_sender_ip = packet[frame][IP].src
-                packet_sender_mac = packet[frame][Ether].src
-                packet_priority = packet[frame][HSRP].priority
-                logging.info("[*] HSRPv1 Sender Value: " + str(packet_priority)) if frame != 0 else logging.info("[*] HSRPv1 ACTIVE Sender Value: " + str(packet_priority))
-                logging.info("[*] HSRPv1 Sender IP: " + str(packet_sender_ip))
-                logging.info("[*] HSRPv1 Sender MAC: " + str(packet_sender_mac))
-                if packet[frame].haslayer(HSRPmd5):
-                    logging.info ("[!] HSRP MD5 Authentication is used. You can bruteforce it.")
-                    logging.info ("[*] Tools for bruteforce: hsrp2john.py, John the Ripper")
-                if packet[frame][HSRP].auth:
-                    print ("[!] Simple HSRP Authentication is used.")
-                    hsrpv1_plaintext = packet[frame][HSRP].auth
-                    simple_hsrp_pass = hsrpv1_plaintext.decode("UTF-8")
-                    logging.info("[!] HSRP Plaintext Password: " + simple_hsrp_pass)
-                return
 
     def detect_hsrpv1(self) -> None:
         print(Fore.GREEN + Style.BRIGHT + "\n[+] Sniffing the HSRPv1 protocol...")
@@ -229,7 +229,7 @@ class Above(object):
             hsrpv1_packet = sniff(count=5, filter="ip dst 224.0.0.2", iface=self.args.interface, timeout=self.args.timeout)
             self._hsrpv1_check(hsrpv1_packet)
         except:
-            logging.error("[!] Error. HSRPv1 isn't detected.")
+            logging.error("[!] HSRPv1 isn't detected.")
         return
 
     def detect_vrrp(self) -> None:
@@ -250,15 +250,14 @@ class Above(object):
                     logging.info(vrrp_all_auth_types[prob_auth])
                     break
             if vrrp_priority <= 255:
-                logging.info("[*] Info: Detected vulnerable VRRP Value")
+                logging.warning("[*] Info: Detected vulnerable VRRP Value")
                 logging.info("[*] Impact: MITM")
                 logging.info("[*] Tools: Scapy, Loki")
             logging.info("[*] VRRP Sender IP: " + ip_src_packet)
             logging.info("[*] VRRP Sender MAC: " + vrrp_mac_sender)
         except:
-            logging.error("[!] Error. VRRP isn't detected.")
+            logging.error("[!] VRRP isn't detected.")
         return
-
 
     def detect_stp(self) -> None:
         print(Fore.GREEN + Style.BRIGHT + "\n[+] Sniffing the STP protocol...")
@@ -267,14 +266,14 @@ class Above(object):
             stp_root_mac = stp_frame[0][STP].rootmac
             stp_root_id = stp_frame[0][STP].rootid
             stp_root_pathcost = stp_frame[0][STP].pathcost
-            logging.info("[*] Info: Detected vulnerable STP")
+            logging.warning("[*] Info: Detected vulnerable STP")
             logging.info("[*] Impact: MITM, VLAN ID Gathering. Check Root Bridge System ID Extension header in STP frame")
             logging.info("[*] Tools: Yersinia, Wireshark")
             logging.info("[*] STP Root MAC: " + str(stp_root_mac))
             logging.info("[*] STP Root ID: " + str(stp_root_id))
             logging.info("[*] STP Root Path Cost: " + str(stp_root_pathcost))
         except:
-            logging.error("[!] Error. STP isn't detected.")
+            logging.error("[!] STP isn't detected.")
         return
 
     def detect_llmnr(self) -> None:
@@ -283,13 +282,13 @@ class Above(object):
             llmnr_packet = sniff(filter="ip dst 224.0.0.252", count=1, timeout=self.args.timeout, iface=self.args.interface)
             llmnr_sender_mac = llmnr_packet[0][Ether].src
             llmnr_sender_ip = llmnr_packet[0][IP].src
-            logging.info("[*] Info: Detected LLMNR.")
+            logging.warning("[*] Info: Detected LLMNR.")
             logging.info("[*] Impact: LLMNR Poisoning Attack (Stealing NetNTLM hashes, Possible SMB/HTTP/NTLM/LDAP Relay Attack)")
             logging.info("[*] Tools: Responder")
             logging.info("[*] LLMNR Sender IP: " + str(llmnr_sender_ip))
             logging.info("[*] LLMNR Sender MAC: " + str(llmnr_sender_mac))
         except:
-            logging.error("[!] Error. LLMNR isn't detected.")
+            logging.error("[!] LLMNR isn't detected.")
         return
 
     def detect_nbns(self) -> None:
@@ -298,28 +297,28 @@ class Above(object):
             nbns_packet = sniff(filter="udp and port 137", count=1, timeout=self.args.timeout, iface=self.args.interface)
             nbns_sender_mac = nbns_packet[0][Ether].src
             nbns_sender_ip = nbns_packet[0][IP].src
-            logging.info("[*] Info: Detected NBT-NS protocol.")
+            logging.warning("[*] Info: Detected NBT-NS protocol.")
             logging.info("[*] Impact: NBT-NS Poisoning Attack (Stealing NetNTLM hashes, Possible SMB/HTTP/NTLM/LDAP Relay Attack)")
             logging.info("[*] Tools: Responder")
             logging.info("[*] NBT-NS Sender IP: " + str(nbns_sender_ip))
             logging.info("[*] NBT-NS Sender MAC: " + str(nbns_sender_mac))
         except:
-            logging.error("[!] Error. NBT-NS isn't detected.")
+            logging.error("[!] NBT-NS isn't detected.")
         return 
 
     def detect_dhcpv6(self) -> None:
         print(Fore.GREEN + Style.BRIGHT + "\n[+] Sniffing the DHCPv6 protocol...")
         try:
-            dhcpv6_packet = sniff(count = 1,lfilter=self._dhcpv6_sniff, iface=self.args.interface, timeout=self.args.timeout)
+            dhcpv6_packet = sniff(count = 1, lfilter=self._dhcpv6_sniff, iface=self.args.interface, timeout=self.args.timeout)
             dhcpv6_mac_address_sender = dhcpv6_packet[0][Ether].src
             dhcpv6_packet_sender = dhcpv6_packet[0][IPv6].src
-            logging.info("[*] Info: Detected DHCPv6 request.")
+            logging.warning("[*] Info: Detected DHCPv6 request.")
             logging.info("[*] Impact: DNS Spoofing over IPv6 Attack (Stealing NetNTLM hashes/NTLM Relay)")
             logging.info("[*] Tools: mitm6")
             logging.info("[*] DHCPv6 Request Sender IP: " + dhcpv6_packet_sender)
             logging.info("[*] DHCPv6 Request Sender MAC: " + dhcpv6_mac_address_sender)
         except:
-            logging.error("[!] Error. DHCPv6 isn't detected.")
+            logging.error("[!] DHCPv6 isn't detected.")
         return
 
     def switch_to_promisc(self, interface) -> None:
@@ -330,7 +329,7 @@ class Above(object):
         if promisc_mode_search:
             print (Fore.YELLOW + Style.BRIGHT + "[*] Switched " + Fore.BLUE + Style.BRIGHT + "successfully")
         else:
-            print (Fore.RED + Style.BRIGHT + "[!] Error. Not switched to promisc.")
+            print (Fore.RED + Style.BRIGHT + "[!] Not switched to promisc.")
     
     def call_scanner(self) -> None:
         '''
