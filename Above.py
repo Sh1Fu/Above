@@ -135,14 +135,14 @@ def detect_lldp():
     if lldp_frame[0].lldp.tlv_system_name:
         lldp_hostname = lldp_frame[0].lldp.tlv_system_name
         print(Fore.GREEN + Style.BRIGHT + "[*] Device System Name: " + Fore.YELLOW + Style.BRIGHT + lldp_hostname)
-    if lldp_frame[0].lldp.port_id:
-        lldp_port_id = lldp_frame[0].lldp.port_id
+    if lldp_frame[0].lldp.port_desc:
+        lldp_port_id = lldp_frame[0].lldp.port_desc
         print(Fore.GREEN + Style.BRIGHT + "[*] Port ID: " + Fore.YELLOW + Style.BRIGHT + lldp_port_id)
     if lldp_frame[0].lldp.tlv_system_desc:
         lldp_os_ver = lldp_frame[0].lldp.tlv_system_desc
         print(Fore.GREEN + Style.BRIGHT + "[*] Device OS Version: " + Fore.YELLOW + Style.BRIGHT + lldp_os_ver)
     if args.resolve_mac:
-        mac_from_lldp_frame = lldp_frame[0].src
+        mac_from_lldp_frame = lldp_frame[0].eth.src
         macinfo = resolve_mac_address(mac_from_lldp_frame)
         print(Fore.WHITE + Style.BRIGHT + "[!] Vendor: " + macinfo)
 
@@ -195,9 +195,15 @@ def detect_mndp():
         if mndp_capture[0].mndp.softwareid:
             mndpsoftidinfo = mndp_capture[0].mndp.softwareid
             print(Fore.GREEN + Style.BRIGHT + "[*] Software ID: " + Fore.YELLOW + Style.BRIGHT + mndpsoftidinfo)
-        if mndp_capture[0].mndp.ipv4address:
+        #if mndp_capture[0].mndp.ipv4address:
+        try:
             mndpipv4addr = mndp_capture[0].mndp.ipv4address
-            print(Fore.GREEN + Style.BRIGHT + "[*] Device IP Address: " + Fore.YELLOW + Style.BRIGHT + mndpipv4addr)
+        except:
+            mndpipv4addr = mndp_capture[0].ip.src
+        print(Fore.GREEN + Style.BRIGHT + "[*] Device IP Address: " + Fore.YELLOW + Style.BRIGHT + mndpipv4addr)
+        if mndp_capture[0].mndp.mac:
+            mndpmac = mndp_capture[0].mndp.mac
+            print(Fore.GREEN + Style.BRIGHT + "[*] Device MAC Address: " + Fore.YELLOW + Style.BRIGHT + mndpmac)
         print(Fore.GREEN + Style.BRIGHT + "[*] Device Model: " + Fore.YELLOW + Style.BRIGHT + mndpmodel)
         print(Fore.GREEN + Style.BRIGHT + "[*] Platform: " + Fore.YELLOW + Style.BRIGHT + mndpplatform)
         print(Fore.GREEN + Style.BRIGHT + "[*] OS Version: " + Fore.YELLOW + Style.BRIGHT + mndposversion)
